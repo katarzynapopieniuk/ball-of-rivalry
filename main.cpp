@@ -50,33 +50,37 @@ vec2d angle_to_vector(double angle) {
     return {std::cos(angle), std::sin(angle)};
 }
 
-vec2d acceleration_vector_from_keyboard_and_player(const PlayerCharacter &player) {
+vec2d
+acceleration_vector_from_keyboard_and_player(const PlayerCharacter &player, SDL_Scancode scanCodeForward, SDL_Scancode scanCodeBack) {
     auto *keyboard_state = SDL_GetKeyboardState(nullptr);
     vec2d forward_vec = angle_to_vector(player.angle);
     vec2d acceleration = {0, 0};
-    if (keyboard_state[SDL_SCANCODE_UP]) {
+    if (keyboard_state[scanCodeForward]) {
         acceleration = acceleration + forward_vec;
     }
-    if (keyboard_state[SDL_SCANCODE_DOWN]) {
+    if (keyboard_state[scanCodeBack]) {
         acceleration = acceleration - forward_vec;
     }
     return acceleration*1500.0;
 }
 
-double angle_from_keyboard_and_player(const PlayerCharacter &player) {
+double angle_from_keyboard_and_player(const PlayerCharacter &player, SDL_Scancode scanCodeLeft, SDL_Scancode scanCodeRight) {
     auto *keyboard_state = SDL_GetKeyboardState(nullptr);
     double angle = player.angle;
-    if (keyboard_state[SDL_SCANCODE_LEFT]) angle = angle - M_PI / 10.0;
-    if (keyboard_state[SDL_SCANCODE_RIGHT]) angle = angle + M_PI / 10.0;
+    if (keyboard_state[scanCodeLeft]) angle = angle - M_PI / 10.0;
+    if (keyboard_state[scanCodeRight]) angle = angle + M_PI / 10.0;
     return angle;
 }
 
 void play_the_game(SDL_Renderer *renderer) {
-    auto player_texture = load_texture(renderer, "player1.bmp");
+    auto firstPlayerTexture = load_texture(renderer, "player1.bmp");
+    auto secondPlayerTexture = load_texture(renderer, "player2.bmp");
     auto background = load_texture(renderer, "wooden_floor.bmp");
     auto stop_texture = load_texture(renderer, "stop.bmp");
-    SDL_Rect player_rect = get_texture_rect(player_texture);
-    PlayerCharacter player = {0, {320.0, 200.0}};
+    SDL_Rect firstPlayerRect = get_texture_rect(firstPlayerTexture);
+    SDL_Rect secondPlayerRect = get_texture_rect(secondPlayerTexture);
+    PlayerCharacter firstPlayer = {0, {300.0, 200.0}};
+    PlayerCharacter secondPlayer = {0, {400.0, 200.0}};
     int gaming = true;
     auto prev_tick = SDL_GetTicks();
     while (gaming) {
@@ -93,20 +97,35 @@ void play_the_game(SDL_Renderer *renderer) {
             }
         }
 
-        player.acceleration = acceleration_vector_from_keyboard_and_player(player);
-        player.angle = angle_from_keyboard_and_player(player);
-        player = player.next_state(TICK_TIME);
+        firstPlayer.acceleration = acceleration_vector_from_keyboard_and_player(firstPlayer, SDL_SCANCODE_UP,
+                                                                                SDL_SCANCODE_DOWN);
+        firstPlayer.angle = angle_from_keyboard_and_player(firstPlayer, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT);
+        firstPlayer = firstPlayer.next_state(TICK_TIME);
 
+        secondPlayer.acceleration = acceleration_vector_from_keyboard_and_player(secondPlayer, SDL_SCANCODE_W,
+                                                                                 SDL_SCANCODE_S);
+        secondPlayer.angle = angle_from_keyboard_and_player(secondPlayer, SDL_SCANCODE_A, SDL_SCANCODE_D);
+        secondPlayer = secondPlayer.next_state(TICK_TIME);
 
         SDL_RenderCopy(renderer, background.get(), nullptr, nullptr);
 
         {
-            auto rect = player_rect;
+            auto rect = firstPlayerRect;
 
-            rect.x = player.position[0] - rect.w / 2;
-            rect.y = player.position[1] - rect.h / 2;
-            SDL_RenderCopyEx(renderer, player_texture.get(),
-                             nullptr, &rect, 180.0 * player.angle / M_PI,
+            rect.x = firstPlayer.position[0] - rect.w / 2;
+            rect.y = firstPlayer.position[1] - rect.h / 2;
+            SDL_RenderCopyEx(renderer, firstPlayerTexture.get(),
+                             nullptr, &rect, 180.0 * firstPlayer.angle / M_PI,
+                             nullptr, SDL_FLIP_NONE);
+        }
+
+        {
+            auto rect = secondPlayerRect;
+
+            rect.x = secondPlayer.position[0] - rect.w / 2;
+            rect.y = secondPlayer.position[1] - rect.h / 2;
+            SDL_RenderCopyEx(renderer, secondPlayerTexture.get(),
+                             nullptr, &rect, 180.0 * secondPlayer.angle / M_PI,
                              nullptr, SDL_FLIP_NONE);
         }
         SDL_RenderPresent(renderer);
