@@ -33,6 +33,10 @@ public:
 
         return next;
     }
+
+    double getDistance(PlayerCharacter otherPlayer) {
+        return sqrt(pow((otherPlayer.position[0] - this->position[0]), 2) + pow((otherPlayer.position[1] - this->position[1]), 2));
+    }
 };
 
 #endif //BALL_OF_RIVALRY_PLAYERCHARACTER_H

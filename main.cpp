@@ -17,6 +17,9 @@
 
 const int TICK_TIME = 33;
 
+std::pair<PlayerCharacter, PlayerCharacter> updatePlayersIfCollision(PlayerCharacter firstPlayer, PlayerCharacter secondPlayer,
+                                                                     PlayerCharacter firstPlayerUpdated, PlayerCharacter secondPlayerUpdated, int playerSize);
+
 std::shared_ptr<SDL_Texture> load_texture(SDL_Renderer *renderer, const std::string& fname) {
     SDL_Surface *bmpSurface = SDL_LoadBMP(("assets/" + fname).c_str());
     if (!bmpSurface) {
@@ -79,6 +82,7 @@ void play_the_game(SDL_Renderer *renderer) {
     auto stop_texture = load_texture(renderer, "stop.bmp");
     SDL_Rect firstPlayerRect = get_texture_rect(firstPlayerTexture);
     SDL_Rect secondPlayerRect = get_texture_rect(secondPlayerTexture);
+    auto playerSize = firstPlayerRect.w;
     PlayerCharacter firstPlayer = {0, {300.0, 200.0}};
     PlayerCharacter secondPlayer = {0, {400.0, 200.0}};
     int gaming = true;
@@ -97,15 +101,22 @@ void play_the_game(SDL_Renderer *renderer) {
             }
         }
 
-        firstPlayer.acceleration = acceleration_vector_from_keyboard_and_player(firstPlayer, SDL_SCANCODE_UP,
-                                                                                SDL_SCANCODE_DOWN);
-        firstPlayer.angle = angle_from_keyboard_and_player(firstPlayer, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT);
-        firstPlayer = firstPlayer.next_state(TICK_TIME);
+        {
 
-        secondPlayer.acceleration = acceleration_vector_from_keyboard_and_player(secondPlayer, SDL_SCANCODE_W,
-                                                                                 SDL_SCANCODE_S);
-        secondPlayer.angle = angle_from_keyboard_and_player(secondPlayer, SDL_SCANCODE_A, SDL_SCANCODE_D);
-        secondPlayer = secondPlayer.next_state(TICK_TIME);
+            firstPlayer.acceleration = acceleration_vector_from_keyboard_and_player(firstPlayer, SDL_SCANCODE_UP,
+                                                                                    SDL_SCANCODE_DOWN);
+            firstPlayer.angle = angle_from_keyboard_and_player(firstPlayer, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT);
+            PlayerCharacter firstPlayerUpdated = firstPlayer.next_state(TICK_TIME);
+
+            secondPlayer.acceleration = acceleration_vector_from_keyboard_and_player(secondPlayer, SDL_SCANCODE_W,
+                                                                                     SDL_SCANCODE_S);
+            secondPlayer.angle = angle_from_keyboard_and_player(secondPlayer, SDL_SCANCODE_A, SDL_SCANCODE_D);
+            PlayerCharacter secondPlayerUpdated = secondPlayer.next_state(TICK_TIME);
+
+            auto players = updatePlayersIfCollision(firstPlayer, secondPlayer, firstPlayerUpdated, secondPlayerUpdated, playerSize);
+            firstPlayer = players.first;
+            secondPlayer = players.second;
+        }
 
         SDL_RenderCopy(renderer, background.get(), nullptr, nullptr);
 
@@ -133,6 +144,22 @@ void play_the_game(SDL_Renderer *renderer) {
         SDL_Delay(TICK_TIME - (current_tick - prev_tick));
         prev_tick += TICK_TIME;
     }
+}
+
+std::pair<PlayerCharacter, PlayerCharacter> updatePlayersIfCollision(PlayerCharacter firstPlayer, PlayerCharacter secondPlayer, PlayerCharacter firstPlayerUpdated,
+                              PlayerCharacter secondPlayerUpdated, int playerSize) {
+    if(firstPlayerUpdated.getDistance(secondPlayerUpdated) >= playerSize) {
+        return {firstPlayerUpdated, secondPlayerUpdated};
+    }
+
+    firstPlayerUpdated.acceleration = {0.0,0.0};
+    firstPlayerUpdated.velocity = {0.0,0.0};
+    firstPlayerUpdated.position = firstPlayer.position;
+    secondPlayerUpdated.acceleration = {0.0,0.0};
+    secondPlayerUpdated.velocity = {0.0,0.0};
+    secondPlayerUpdated.position = secondPlayer.position;
+
+    return {firstPlayerUpdated, secondPlayerUpdated};
 }
 
 int main() {
