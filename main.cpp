@@ -21,7 +21,7 @@
 #include <time.h>       /* time */
 
 const int TICK_TIME = 33;
-const int DUST_SPAWN_TICKS = 150;
+const int DUST_SPAWN_TICKS = 100;
 
 std::pair<PlayerCharacter, PlayerCharacter> updatePlayersIfCollision(PlayerCharacter firstPlayer, PlayerCharacter secondPlayer,
                                                                      PlayerCharacter firstPlayerUpdated, PlayerCharacter secondPlayerUpdated, int playerSize);
@@ -29,6 +29,9 @@ std::pair<PlayerCharacter, PlayerCharacter> updatePlayersIfCollision(PlayerChara
 PlayerCharacter updatePlayerIfWallCollision(PlayerCharacter playerCharacter, int i);
 
 void spawnDust(vec2d dustPositions[20], int dustIndex, int dustSize) ;
+
+bool
+playerScored(PlayerCharacter playerCharacter, vec2d dustPositions[20], int dustAmount, int playerSize, int dustSize);
 
 std::shared_ptr<SDL_Texture> load_texture(SDL_Renderer *renderer, const std::string& fname) {
     SDL_Surface *bmpSurface = SDL_LoadBMP(("assets/" + fname).c_str());
@@ -149,6 +152,18 @@ void play_the_game(SDL_Renderer *renderer) {
             secondPlayer = updatePlayerIfWallCollision(players.second, playerSize);
         }
 
+        {
+            if(playerScored(firstPlayer, dustPositions, dustAmmount, playerSize, dustSize)) {
+                firstPlayer.points = firstPlayer.points + 1;
+                dustAmmount--;
+            }
+
+            if(playerScored(secondPlayer, dustPositions, dustAmmount, playerSize, dustSize)) {
+                firstPlayer.points = firstPlayer.points + 1;
+                dustAmmount--;
+            }
+        }
+
         SDL_RenderCopy(renderer, background.get(), nullptr, nullptr);
 
         for(int i = 0; i < dustAmmount; i++) {
@@ -159,7 +174,6 @@ void play_the_game(SDL_Renderer *renderer) {
                              nullptr, &rect, 0,
                              nullptr, SDL_FLIP_NONE);
         }
-
 
         {
             auto rect = firstPlayerRect;
@@ -186,6 +200,19 @@ void play_the_game(SDL_Renderer *renderer) {
         SDL_Delay(TICK_TIME - (current_tick - prev_tick));
         prev_tick += TICK_TIME;
     }
+}
+
+bool playerScored(PlayerCharacter playerCharacter, vec2d dustPositions[20], int dustAmount, int playerSize, int dustSize) {
+    for(int i = 0; i < dustAmount; i++) {
+        if(playerCharacter.getDistance(dustPositions[i]) < playerSize - dustSize) {
+            for(int j = i; j < dustAmount-1; j++) {
+                dustPositions[j] = dustPositions[j+1];
+            }
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void spawnDust(vec2d dustPositions[20], int dustIndex, int dustSize) {

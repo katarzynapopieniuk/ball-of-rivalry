@@ -17,6 +17,7 @@ public:
     vec2d position;
     vec2d velocity;
     vec2d acceleration;
+    int points;
 
     PlayerCharacter next_state(double dt_ms) {
         double dt = dt_ms / 1000.0;
@@ -35,7 +36,11 @@ public:
     }
 
     double getDistance(PlayerCharacter otherPlayer) {
-        return sqrt(pow((otherPlayer.position[0] - this->position[0]), 2) + pow((otherPlayer.position[1] - this->position[1]), 2));
+        return getDistance(otherPlayer.position);
+    }
+
+    double getDistance(vec2d comparedPosition) {
+        return sqrt(pow((comparedPosition[0] - this->position[0]), 2) + pow((comparedPosition[1] - this->position[1]), 2));
     }
 };
 
