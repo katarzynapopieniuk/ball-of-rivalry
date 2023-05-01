@@ -11,8 +11,12 @@
 #include <cmath>
 
 #define SDL_MAIN_HANDLED
-#define WINDOW_WIDTH 640
-#define WINDOW_HEIGHT 480
+#define PLAYGROUND_WIDTH 650
+#define PLAYGROUND_HEIGHT 480
+#define SCOREBOARD_WIDTH 650
+#define SCOREBOARD_HEIGHT 390
+#define WINDOW_WIDTH 650
+#define WINDOW_HEIGHT 870
 #define MAX_DUST_AMOUNT 20
 
 #include <SDL.h>
@@ -22,6 +26,11 @@
 
 const int TICK_TIME = 33;
 const int DUST_SPAWN_TICKS = 100;
+const int PLAYER_SCORE_HEIGHT = 300;
+const int TIME_HEIGHT = 120;
+const int LEFT_SCORE_START_WIDTH = 260;
+const int RIGHT_SCORE_START_WIDTH = 350;
+const int SCORE_JUMP = 50;
 
 std::pair<PlayerCharacter, PlayerCharacter> updatePlayersIfCollision(PlayerCharacter firstPlayer, PlayerCharacter secondPlayer,
                                                                      PlayerCharacter firstPlayerUpdated, PlayerCharacter secondPlayerUpdated, int playerSize);
@@ -96,11 +105,33 @@ void play_the_game(SDL_Renderer *renderer) {
     auto firstPlayerTexture = load_texture(renderer, "player1.bmp");
     auto secondPlayerTexture = load_texture(renderer, "player2.bmp");
     auto background = load_texture(renderer, "wooden_floor.bmp");
-    auto stop_texture = load_texture(renderer, "stop.bmp");
     auto dust_texture = load_texture(renderer, "dust.bmp");
+    auto scoreboard_texture = load_texture(renderer, "scoreboard.bmp");
+    auto number0_texture = load_texture(renderer, "number0.bmp");
+    auto number1_texture = load_texture(renderer, "number1.bmp");
+    auto number2_texture = load_texture(renderer, "number2.bmp");
+    auto number3_texture = load_texture(renderer, "number3.bmp");
+    auto number4_texture = load_texture(renderer, "number4.bmp");
+    auto number5_texture = load_texture(renderer, "number5.bmp");
+    auto number6_texture = load_texture(renderer, "number6.bmp");
+    auto number7_texture = load_texture(renderer, "number7.bmp");
+    auto number8_texture = load_texture(renderer, "number8.bmp");
+    auto number9_texture = load_texture(renderer, "number9.bmp");
+    std::shared_ptr<SDL_Texture> numberTextures[10] = {number0_texture, number1_texture, number2_texture,
+                                                        number3_texture, number4_texture, number5_texture,
+                                                        number6_texture, number7_texture, number8_texture,
+                                                        number9_texture};
+
     SDL_Rect firstPlayerRect = get_texture_rect(firstPlayerTexture);
     SDL_Rect secondPlayerRect = get_texture_rect(secondPlayerTexture);
     SDL_Rect dustRect = get_texture_rect(dust_texture);
+    SDL_Rect scoreboardRect = get_texture_rect(scoreboard_texture);
+
+    SDL_Rect numberRects[10];
+    for(int i=0; i<10; i++) {
+        numberRects[i] = get_texture_rect(numberTextures[i]);
+    }
+
     auto playerSize = firstPlayerRect.w;
     PlayerCharacter firstPlayer = {0, {300.0, 200.0}};
     PlayerCharacter secondPlayer = {0, {400.0, 200.0}};
@@ -108,7 +139,7 @@ void play_the_game(SDL_Renderer *renderer) {
     auto prev_tick = SDL_GetTicks();
     int ticksTillNextDustSpawn = DUST_SPAWN_TICKS;
     vec2d dustPositions[MAX_DUST_AMOUNT] = {};
-    int dustAmmount = 0;
+    int dustAmount = 0;
     int dustSize = dustRect.w;
     srand ((unsigned)time(NULL));
     while (gaming) {
@@ -129,9 +160,9 @@ void play_the_game(SDL_Renderer *renderer) {
             ticksTillNextDustSpawn--;
             if(ticksTillNextDustSpawn == 0) {
                 ticksTillNextDustSpawn = DUST_SPAWN_TICKS;
-                if(dustAmmount < MAX_DUST_AMOUNT) {
-                    spawnDust(dustPositions, dustAmmount, dustSize);
-                    dustAmmount ++;
+                if(dustAmount < MAX_DUST_AMOUNT) {
+                    spawnDust(dustPositions, dustAmount, dustSize);
+                    dustAmount ++;
                 }
             }
         }
@@ -153,20 +184,20 @@ void play_the_game(SDL_Renderer *renderer) {
         }
 
         {
-            if(playerScored(firstPlayer, dustPositions, dustAmmount, playerSize, dustSize)) {
+            if(playerScored(firstPlayer, dustPositions, dustAmount, playerSize, dustSize)) {
                 firstPlayer.points = firstPlayer.points + 1;
-                dustAmmount--;
+                dustAmount--;
             }
 
-            if(playerScored(secondPlayer, dustPositions, dustAmmount, playerSize, dustSize)) {
-                firstPlayer.points = firstPlayer.points + 1;
-                dustAmmount--;
+            if(playerScored(secondPlayer, dustPositions, dustAmount, playerSize, dustSize)) {
+                secondPlayer.points = secondPlayer.points + 1;
+                dustAmount--;
             }
         }
 
         SDL_RenderCopy(renderer, background.get(), nullptr, nullptr);
 
-        for(int i = 0; i < dustAmmount; i++) {
+        for(int i = 0; i < dustAmount; i++) {
             auto rect = dustRect;
             rect.x = dustPositions[i][0] - rect.w / 2;
             rect.y = dustPositions[i][1] - rect.h / 2;
@@ -194,6 +225,60 @@ void play_the_game(SDL_Renderer *renderer) {
                              nullptr, &rect, 180.0 * secondPlayer.angle / M_PI,
                              nullptr, SDL_FLIP_NONE);
         }
+
+        {
+            auto rect = scoreboardRect;
+
+            rect.x = 0;
+            rect.y = PLAYGROUND_HEIGHT + 1;
+            SDL_RenderCopyEx(renderer, scoreboard_texture.get(),
+                             nullptr, &rect, 0,
+                             nullptr, SDL_FLIP_NONE);
+        }
+
+        {
+            auto score = firstPlayer.points;
+            int positionX = LEFT_SCORE_START_WIDTH;
+            do {
+                auto number = score % 10;
+
+                auto rect = numberRects[number];
+                rect.x = positionX;
+                rect.y = PLAYER_SCORE_HEIGHT + PLAYGROUND_HEIGHT + 1;
+                SDL_RenderCopyEx(renderer, numberTextures[number].get(),
+                                 nullptr, &rect, 0,
+                                 nullptr, SDL_FLIP_NONE);
+
+                score /= 10;
+                positionX -= SCORE_JUMP;
+            } while (score > 0);
+        }
+
+        {
+            auto score = secondPlayer.points;
+            int howManyDigits = 0;
+            int temp = score;
+            do {
+                temp /= 10;
+                howManyDigits ++;
+            } while (temp > 0);
+
+            int positionX = RIGHT_SCORE_START_WIDTH + (howManyDigits-1) * SCORE_JUMP;
+            do {
+                auto number = score % 10;
+
+                auto rect = numberRects[number];
+                rect.x = positionX;
+                rect.y = PLAYER_SCORE_HEIGHT + PLAYGROUND_HEIGHT + 1;
+                SDL_RenderCopyEx(renderer, numberTextures[number].get(),
+                                 nullptr, &rect, 0,
+                                 nullptr, SDL_FLIP_NONE);
+
+                score /= 10;
+                positionX -= SCORE_JUMP;
+            } while (score > 0);
+        }
+
         SDL_RenderPresent(renderer);
 
         auto current_tick = SDL_GetTicks();
@@ -216,7 +301,7 @@ bool playerScored(PlayerCharacter playerCharacter, vec2d dustPositions[20], int 
 }
 
 void spawnDust(vec2d dustPositions[20], int dustIndex, int dustSize) {
-    dustPositions[dustIndex] = {static_cast<double>(rand() % (WINDOW_WIDTH - dustSize) + dustSize/2), static_cast<double>(rand() % (WINDOW_WIDTH - dustSize) + dustSize/2)};
+    dustPositions[dustIndex] = {static_cast<double>(rand() % (PLAYGROUND_WIDTH - dustSize) + dustSize / 2), static_cast<double>(rand() % (PLAYGROUND_WIDTH - dustSize) + dustSize / 2)};
 }
 
 std::pair<PlayerCharacter, PlayerCharacter> updatePlayersIfCollision(PlayerCharacter firstPlayer, PlayerCharacter secondPlayer, PlayerCharacter firstPlayerUpdated,
@@ -251,8 +336,8 @@ PlayerCharacter updatePlayerIfWallCollision(PlayerCharacter playerCharacter, int
         playerCharacter.position[0] = playerSize / 2;
         playerCharacter.velocity[0] = -playerCharacter.velocity[0];
     }
-    if (playerCharacter.position[0] >WINDOW_WIDTH - playerSize / 2) {
-        playerCharacter.position[0] = WINDOW_WIDTH - playerSize / 2;
+    if (playerCharacter.position[0] > PLAYGROUND_WIDTH - playerSize / 2) {
+        playerCharacter.position[0] = PLAYGROUND_WIDTH - playerSize / 2;
         playerCharacter.velocity[0] = -playerCharacter.velocity[0];
     }
     if (playerCharacter.position[1] < playerSize / 2) {
@@ -260,8 +345,8 @@ PlayerCharacter updatePlayerIfWallCollision(PlayerCharacter playerCharacter, int
         playerCharacter.velocity[1] = -playerCharacter.velocity[1];
     }
 
-    if (playerCharacter.position[1] > WINDOW_HEIGHT - playerSize / 2) {
-        playerCharacter.position[1] = WINDOW_HEIGHT - playerSize / 2;
+    if (playerCharacter.position[1] > PLAYGROUND_HEIGHT - playerSize / 2) {
+        playerCharacter.position[1] = PLAYGROUND_HEIGHT - playerSize / 2;
         playerCharacter.velocity[1] = -playerCharacter.velocity[1];
     }
 
