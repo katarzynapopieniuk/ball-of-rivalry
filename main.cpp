@@ -13,16 +13,22 @@
 #define SDL_MAIN_HANDLED
 #define WINDOW_WIDTH 640
 #define WINDOW_HEIGHT 480
+#define MAX_DUST_AMOUNT 20
 
 #include <SDL.h>
 #include "operator_definitions.h"
+#include <stdlib.h>     /* srand, rand */
+#include <time.h>       /* time */
 
 const int TICK_TIME = 33;
+const int DUST_SPAWN_TICKS = 150;
 
 std::pair<PlayerCharacter, PlayerCharacter> updatePlayersIfCollision(PlayerCharacter firstPlayer, PlayerCharacter secondPlayer,
                                                                      PlayerCharacter firstPlayerUpdated, PlayerCharacter secondPlayerUpdated, int playerSize);
 
 PlayerCharacter updatePlayerIfWallCollision(PlayerCharacter playerCharacter, int i);
+
+void spawnDust(vec2d dustPositions[20], int dustIndex, int dustSize) ;
 
 std::shared_ptr<SDL_Texture> load_texture(SDL_Renderer *renderer, const std::string& fname) {
     SDL_Surface *bmpSurface = SDL_LoadBMP(("assets/" + fname).c_str());
@@ -88,13 +94,20 @@ void play_the_game(SDL_Renderer *renderer) {
     auto secondPlayerTexture = load_texture(renderer, "player2.bmp");
     auto background = load_texture(renderer, "wooden_floor.bmp");
     auto stop_texture = load_texture(renderer, "stop.bmp");
+    auto dust_texture = load_texture(renderer, "dust.bmp");
     SDL_Rect firstPlayerRect = get_texture_rect(firstPlayerTexture);
     SDL_Rect secondPlayerRect = get_texture_rect(secondPlayerTexture);
+    SDL_Rect dustRect = get_texture_rect(dust_texture);
     auto playerSize = firstPlayerRect.w;
     PlayerCharacter firstPlayer = {0, {300.0, 200.0}};
     PlayerCharacter secondPlayer = {0, {400.0, 200.0}};
     int gaming = true;
     auto prev_tick = SDL_GetTicks();
+    int ticksTillNextDustSpawn = DUST_SPAWN_TICKS;
+    vec2d dustPositions[MAX_DUST_AMOUNT] = {};
+    int dustAmmount = 0;
+    int dustSize = dustRect.w;
+    srand ((unsigned)time(NULL));
     while (gaming) {
         SDL_Event sdlEvent;
 
@@ -110,7 +123,17 @@ void play_the_game(SDL_Renderer *renderer) {
         }
 
         {
+            ticksTillNextDustSpawn--;
+            if(ticksTillNextDustSpawn == 0) {
+                ticksTillNextDustSpawn = DUST_SPAWN_TICKS;
+                if(dustAmmount < MAX_DUST_AMOUNT) {
+                    spawnDust(dustPositions, dustAmmount, dustSize);
+                    dustAmmount ++;
+                }
+            }
+        }
 
+        {
             firstPlayer.acceleration = acceleration_vector_from_keyboard_and_player(firstPlayer, SDL_SCANCODE_UP,
                                                                                     SDL_SCANCODE_DOWN);
             firstPlayer.angle = angle_from_keyboard_and_player(firstPlayer, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT);
@@ -127,6 +150,16 @@ void play_the_game(SDL_Renderer *renderer) {
         }
 
         SDL_RenderCopy(renderer, background.get(), nullptr, nullptr);
+
+        for(int i = 0; i < dustAmmount; i++) {
+            auto rect = dustRect;
+            rect.x = dustPositions[i][0] - rect.w / 2;
+            rect.y = dustPositions[i][1] - rect.h / 2;
+            SDL_RenderCopyEx(renderer, dust_texture.get(),
+                             nullptr, &rect, 0,
+                             nullptr, SDL_FLIP_NONE);
+        }
+
 
         {
             auto rect = firstPlayerRect;
@@ -148,10 +181,15 @@ void play_the_game(SDL_Renderer *renderer) {
                              nullptr, SDL_FLIP_NONE);
         }
         SDL_RenderPresent(renderer);
+
         auto current_tick = SDL_GetTicks();
         SDL_Delay(TICK_TIME - (current_tick - prev_tick));
         prev_tick += TICK_TIME;
     }
+}
+
+void spawnDust(vec2d dustPositions[20], int dustIndex, int dustSize) {
+    dustPositions[dustIndex] = {static_cast<double>(rand() % (WINDOW_WIDTH - dustSize) + dustSize/2), static_cast<double>(rand() % (WINDOW_WIDTH - dustSize) + dustSize/2)};
 }
 
 std::pair<PlayerCharacter, PlayerCharacter> updatePlayersIfCollision(PlayerCharacter firstPlayer, PlayerCharacter secondPlayer, PlayerCharacter firstPlayerUpdated,
