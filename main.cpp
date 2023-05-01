@@ -53,6 +53,10 @@ vec2d angle_to_vector(double angle) {
     return {std::cos(angle), std::sin(angle)};
 }
 
+double dot(vec2d first, vec2d second) {
+    return first[0] * second[0] + first[1] * second[1];
+}
+
 vec2d
 acceleration_vector_from_keyboard_and_player(const PlayerCharacter &player, SDL_Scancode scanCodeForward, SDL_Scancode scanCodeBack) {
     auto *keyboard_state = SDL_GetKeyboardState(nullptr);
@@ -148,15 +152,26 @@ void play_the_game(SDL_Renderer *renderer) {
 
 std::pair<PlayerCharacter, PlayerCharacter> updatePlayersIfCollision(PlayerCharacter firstPlayer, PlayerCharacter secondPlayer, PlayerCharacter firstPlayerUpdated,
                               PlayerCharacter secondPlayerUpdated, int playerSize) {
-    if(firstPlayerUpdated.getDistance(secondPlayerUpdated) >= playerSize) {
+    vec2d dir = secondPlayer.position - firstPlayer.position;
+    double distance = firstPlayerUpdated.getDistance(secondPlayerUpdated);
+    if(distance >= playerSize) {
         return {firstPlayerUpdated, secondPlayerUpdated};
     }
 
-    firstPlayerUpdated.acceleration = {0.0,0.0};
-    firstPlayerUpdated.velocity = {0.0,0.0};
+    dir = dir / distance;
+
+    double v1 = dot(firstPlayer.velocity, dir);
+    double v2 = dot(secondPlayer.velocity, dir);
+
+    double restitution = 0.97;
+    double newV1 = (v1 + v2 - (v1 - v2) * restitution) / 2;
+    double newV2 = (v1 + v2 - (v2 - v1) * restitution) / 2;
+
+    firstPlayerUpdated.acceleration = firstPlayer.acceleration;
+    firstPlayerUpdated.velocity = firstPlayer.velocity + dir * (newV1 - v1);
     firstPlayerUpdated.position = firstPlayer.position;
-    secondPlayerUpdated.acceleration = {0.0,0.0};
-    secondPlayerUpdated.velocity = {0.0,0.0};
+    secondPlayerUpdated.acceleration = secondPlayer.acceleration;
+    secondPlayerUpdated.velocity = secondPlayer.velocity + dir * (newV2 - v2);
     secondPlayerUpdated.position = secondPlayer.position;
 
     return {firstPlayerUpdated, secondPlayerUpdated};
