@@ -11,6 +11,8 @@
 #include <cmath>
 
 #define SDL_MAIN_HANDLED
+#define WINDOW_WIDTH 640
+#define WINDOW_HEIGHT 480
 
 #include <SDL.h>
 #include "operator_definitions.h"
@@ -19,6 +21,8 @@ const int TICK_TIME = 33;
 
 std::pair<PlayerCharacter, PlayerCharacter> updatePlayersIfCollision(PlayerCharacter firstPlayer, PlayerCharacter secondPlayer,
                                                                      PlayerCharacter firstPlayerUpdated, PlayerCharacter secondPlayerUpdated, int playerSize);
+
+PlayerCharacter updatePlayerIfWallCollision(PlayerCharacter playerCharacter, int i);
 
 std::shared_ptr<SDL_Texture> load_texture(SDL_Renderer *renderer, const std::string& fname) {
     SDL_Surface *bmpSurface = SDL_LoadBMP(("assets/" + fname).c_str());
@@ -118,8 +122,8 @@ void play_the_game(SDL_Renderer *renderer) {
             PlayerCharacter secondPlayerUpdated = secondPlayer.next_state(TICK_TIME);
 
             auto players = updatePlayersIfCollision(firstPlayer, secondPlayer, firstPlayerUpdated, secondPlayerUpdated, playerSize);
-            firstPlayer = players.first;
-            secondPlayer = players.second;
+            firstPlayer = updatePlayerIfWallCollision(players.first, playerSize);
+            secondPlayer = updatePlayerIfWallCollision(players.second, playerSize);
         }
 
         SDL_RenderCopy(renderer, background.get(), nullptr, nullptr);
@@ -177,11 +181,33 @@ std::pair<PlayerCharacter, PlayerCharacter> updatePlayersIfCollision(PlayerChara
     return {firstPlayerUpdated, secondPlayerUpdated};
 }
 
+PlayerCharacter updatePlayerIfWallCollision(PlayerCharacter playerCharacter, int playerSize) {
+    if (playerCharacter.position[0] < playerSize / 2) {
+        playerCharacter.position[0] = playerSize / 2;
+        playerCharacter.velocity[0] = -playerCharacter.velocity[0];
+    }
+    if (playerCharacter.position[0] >WINDOW_WIDTH - playerSize / 2) {
+        playerCharacter.position[0] = WINDOW_WIDTH - playerSize / 2;
+        playerCharacter.velocity[0] = -playerCharacter.velocity[0];
+    }
+    if (playerCharacter.position[1] < playerSize / 2) {
+        playerCharacter.position[1] = playerSize / 2;
+        playerCharacter.velocity[1] = -playerCharacter.velocity[1];
+    }
+
+    if (playerCharacter.position[1] > WINDOW_HEIGHT - playerSize / 2) {
+        playerCharacter.position[1] = WINDOW_HEIGHT - playerSize / 2;
+        playerCharacter.velocity[1] = -playerCharacter.velocity[1];
+    }
+
+    return playerCharacter;
+}
+
 int main() {
     SDL_Init(SDL_INIT_EVERYTHING);
     SDL_Window *window;
     SDL_Renderer *renderer;
-    SDL_CreateWindowAndRenderer(640, 480,
+    SDL_CreateWindowAndRenderer(WINDOW_WIDTH, WINDOW_HEIGHT,
                                 SDL_WINDOW_SHOWN,
                                 &window, &renderer);
 
