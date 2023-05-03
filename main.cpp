@@ -18,6 +18,8 @@
 #define WINDOW_WIDTH 650
 #define WINDOW_HEIGHT 870
 #define MAX_DUST_AMOUNT 20
+#define WINNER_PLAYER_NUMBER_HEIGHT 140
+#define WINNER_PLAYER_NUMBER_WIDTH 410
 
 #include <SDL.h>
 #include "operator_definitions.h"
@@ -108,6 +110,8 @@ void play_the_game(SDL_Renderer *renderer) {
     auto background = load_texture(renderer, "wooden_floor.bmp");
     auto dust_texture = load_texture(renderer, "dust.bmp");
     auto scoreboard_texture = load_texture(renderer, "scoreboard.bmp");
+    auto tieboard_texture = load_texture(renderer, "tieboard.bmp");
+    auto winnerboard_texture = load_texture(renderer, "winnerboard.bmp");
     auto number0_texture = load_texture(renderer, "number0.bmp");
     auto number1_texture = load_texture(renderer, "number1.bmp");
     auto number2_texture = load_texture(renderer, "number2.bmp");
@@ -127,6 +131,8 @@ void play_the_game(SDL_Renderer *renderer) {
     SDL_Rect secondPlayerRect = get_texture_rect(secondPlayerTexture);
     SDL_Rect dustRect = get_texture_rect(dust_texture);
     SDL_Rect scoreboardRect = get_texture_rect(scoreboard_texture);
+    SDL_Rect tieboardRect = get_texture_rect(tieboard_texture);
+    SDL_Rect winnerboardRect = get_texture_rect(winnerboard_texture);
 
     SDL_Rect numberRects[10];
     for(int i=0; i<10; i++) {
@@ -322,6 +328,9 @@ void play_the_game(SDL_Renderer *renderer) {
                     positionX -= SCORE_JUMP;
                 }
             }
+            if(timeToEndInSeconds <= 0) {
+                gaming = 0;
+            }
 
         }
 
@@ -330,6 +339,59 @@ void play_the_game(SDL_Renderer *renderer) {
         auto current_tick = SDL_GetTicks();
         SDL_Delay(TICK_TIME - (current_tick - prev_tick));
         prev_tick += TICK_TIME;
+    }
+
+    while(true) {
+        SDL_Event sdlEvent;
+
+        while (SDL_PollEvent(&sdlEvent) != 0) {
+            switch (sdlEvent.type) {
+                case SDL_QUIT:
+                    gaming = false;
+                    break;
+                case SDL_KEYDOWN:
+                    if (sdlEvent.key.keysym.sym == SDLK_q) gaming = false;
+                    break;
+            }
+        }
+
+        if(firstPlayer.points == secondPlayer.points) {
+            auto rect = tieboardRect;
+
+            rect.x = 0;
+            rect.y = PLAYGROUND_HEIGHT + 1;
+            SDL_RenderCopyEx(renderer, tieboard_texture.get(),
+                             nullptr, &rect, 0,
+                             nullptr, SDL_FLIP_NONE);
+        } else {
+            auto rect = winnerboardRect;
+
+            rect.x = 0;
+            rect.y = PLAYGROUND_HEIGHT + 1;
+            SDL_RenderCopyEx(renderer, winnerboard_texture.get(),
+                             nullptr, &rect, 0,
+                             nullptr, SDL_FLIP_NONE);
+        }
+
+        if(firstPlayer.points > secondPlayer.points) {
+            auto number = 1;
+            auto rect = numberRects[number];
+            rect.x = WINNER_PLAYER_NUMBER_WIDTH;
+            rect.y = WINNER_PLAYER_NUMBER_HEIGHT + PLAYGROUND_HEIGHT + 1;
+            SDL_RenderCopyEx(renderer, numberTextures[number].get(),
+                             nullptr, &rect, 0,
+                             nullptr, SDL_FLIP_NONE);
+        } else if(firstPlayer.points < secondPlayer.points) {
+            auto number = 2;
+            auto rect = numberRects[number];
+            rect.x = WINNER_PLAYER_NUMBER_WIDTH;
+            rect.y = WINNER_PLAYER_NUMBER_HEIGHT + PLAYGROUND_HEIGHT + 1;
+            SDL_RenderCopyEx(renderer, numberTextures[number].get(),
+                             nullptr, &rect, 0,
+                             nullptr, SDL_FLIP_NONE);
+        }
+
+        SDL_RenderPresent(renderer);
     }
 }
 
