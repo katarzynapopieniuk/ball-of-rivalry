@@ -31,6 +31,7 @@ const int TIME_HEIGHT = 120;
 const int LEFT_SCORE_START_WIDTH = 260;
 const int RIGHT_SCORE_START_WIDTH = 350;
 const int SCORE_JUMP = 50;
+const int TOTAL_GAME_TIME_IN_SECONDS = 90;
 
 std::pair<PlayerCharacter, PlayerCharacter> updatePlayersIfCollision(PlayerCharacter firstPlayer, PlayerCharacter secondPlayer,
                                                                      PlayerCharacter firstPlayerUpdated, PlayerCharacter secondPlayerUpdated, int playerSize);
@@ -141,6 +142,8 @@ void play_the_game(SDL_Renderer *renderer) {
     vec2d dustPositions[MAX_DUST_AMOUNT] = {};
     int dustAmount = 0;
     int dustSize = dustRect.w;
+    time_t startTime, currentTime;
+    time (&startTime);
     srand ((unsigned)time(NULL));
     while (gaming) {
         SDL_Event sdlEvent;
@@ -277,6 +280,49 @@ void play_the_game(SDL_Renderer *renderer) {
                 score /= 10;
                 positionX -= SCORE_JUMP;
             } while (score > 0);
+        }
+
+        {
+            time(&currentTime);
+            int timeElapsedInSeconds = difftime (currentTime, startTime);
+            int timeToEndInSeconds = TOTAL_GAME_TIME_IN_SECONDS - timeElapsedInSeconds;
+            int minutesLeft = timeToEndInSeconds / 60;
+            int secondsLeft = timeToEndInSeconds % 60;
+
+            {
+                int positionX = LEFT_SCORE_START_WIDTH;
+                do {
+                    auto number = minutesLeft % 10;
+
+                    auto rect = numberRects[number];
+                    rect.x = positionX;
+                    rect.y = TIME_HEIGHT + PLAYGROUND_HEIGHT + 1;
+                    SDL_RenderCopyEx(renderer, numberTextures[number].get(),
+                                     nullptr, &rect, 0,
+                                     nullptr, SDL_FLIP_NONE);
+
+                    minutesLeft /= 10;
+                    positionX -= SCORE_JUMP;
+                } while (minutesLeft > 0);
+            }
+
+            {
+                int positionX = RIGHT_SCORE_START_WIDTH + SCORE_JUMP;
+                for(int i = 0; i < 2; i++) {
+                    auto number = secondsLeft % 10;
+
+                    auto rect = numberRects[number];
+                    rect.x = positionX;
+                    rect.y = TIME_HEIGHT + PLAYGROUND_HEIGHT + 1;
+                    SDL_RenderCopyEx(renderer, numberTextures[number].get(),
+                                     nullptr, &rect, 0,
+                                     nullptr, SDL_FLIP_NONE);
+
+                    secondsLeft /= 10;
+                    positionX -= SCORE_JUMP;
+                }
+            }
+
         }
 
         SDL_RenderPresent(renderer);
