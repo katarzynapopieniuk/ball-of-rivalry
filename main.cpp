@@ -34,6 +34,10 @@ const int LEFT_SCORE_START_WIDTH = 260;
 const int RIGHT_SCORE_START_WIDTH = 350;
 const int SCORE_JUMP = 50;
 const int TOTAL_GAME_TIME_IN_SECONDS = 90;
+const int HOLES_AMOUNT = 2;
+const int TIME_TO_RESPAWN_AFTER_DEATH_IN_SECONDS = 3;
+const int FAKE_POSITION_IF_FELL = -99999;
+const vec2d HOLES_POSITIONS[] = {{80, 400}, {500, 400}};
 
 std::pair<PlayerCharacter, PlayerCharacter> updatePlayersIfCollision(PlayerCharacter firstPlayer, PlayerCharacter secondPlayer,
                                                                      PlayerCharacter firstPlayerUpdated, PlayerCharacter secondPlayerUpdated, int playerSize);
@@ -44,6 +48,8 @@ void spawnDust(vec2d dustPositions[20], int dustIndex, int dustSize) ;
 
 bool
 playerScored(PlayerCharacter playerCharacter, vec2d dustPositions[20], int dustAmount, int playerSize, int dustSize);
+
+bool playerFellIntoHole(PlayerCharacter playerCharacter, int playerSize, int holeSize);
 
 std::shared_ptr<SDL_Texture> load_texture(SDL_Renderer *renderer, const std::string& fname) {
     SDL_Surface *bmpSurface = SDL_LoadBMP(("assets/" + fname).c_str());
@@ -108,6 +114,7 @@ void play_the_game(SDL_Renderer *renderer) {
     auto firstPlayerTexture = load_texture(renderer, "player1.bmp");
     auto secondPlayerTexture = load_texture(renderer, "player2.bmp");
     auto background = load_texture(renderer, "wooden_floor.bmp");
+    auto hole_texture = load_texture(renderer, "hole.bmp");
     auto dust_texture = load_texture(renderer, "dust.bmp");
     auto scoreboard_texture = load_texture(renderer, "scoreboard.bmp");
     auto tieboard_texture = load_texture(renderer, "tieboard.bmp");
@@ -133,6 +140,7 @@ void play_the_game(SDL_Renderer *renderer) {
     SDL_Rect scoreboardRect = get_texture_rect(scoreboard_texture);
     SDL_Rect tieboardRect = get_texture_rect(tieboard_texture);
     SDL_Rect winnerboardRect = get_texture_rect(winnerboard_texture);
+    SDL_Rect holeRect = get_texture_rect(hole_texture);
 
     SDL_Rect numberRects[10];
     for(int i=0; i<10; i++) {
@@ -148,9 +156,13 @@ void play_the_game(SDL_Renderer *renderer) {
     vec2d dustPositions[MAX_DUST_AMOUNT] = {};
     int dustAmount = 0;
     int dustSize = dustRect.w;
-    time_t startTime, currentTime;
+    int holeSize = holeRect.w;
+    time_t startTime, currentTime, firstPlayerDeathTime, secondPlayerDeathTime;
     time (&startTime);
     srand ((unsigned)time(NULL));
+    bool firstPlayerDied = false;
+    bool secondPlayerDied = false;
+
     while (gaming) {
         SDL_Event sdlEvent;
 
@@ -177,19 +189,28 @@ void play_the_game(SDL_Renderer *renderer) {
         }
 
         {
-            firstPlayer.acceleration = acceleration_vector_from_keyboard_and_player(firstPlayer, SDL_SCANCODE_UP,
-                                                                                    SDL_SCANCODE_DOWN);
-            firstPlayer.angle = angle_from_keyboard_and_player(firstPlayer, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT);
+            if(!firstPlayerDied) {
+                firstPlayer.acceleration = acceleration_vector_from_keyboard_and_player(firstPlayer, SDL_SCANCODE_UP,SDL_SCANCODE_DOWN);
+                firstPlayer.angle = angle_from_keyboard_and_player(firstPlayer, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT);
+            }
+
             PlayerCharacter firstPlayerUpdated = firstPlayer.next_state(TICK_TIME);
 
-            secondPlayer.acceleration = acceleration_vector_from_keyboard_and_player(secondPlayer, SDL_SCANCODE_W,
-                                                                                     SDL_SCANCODE_S);
-            secondPlayer.angle = angle_from_keyboard_and_player(secondPlayer, SDL_SCANCODE_A, SDL_SCANCODE_D);
+            if(!secondPlayerDied) {
+                secondPlayer.acceleration = acceleration_vector_from_keyboard_and_player(secondPlayer, SDL_SCANCODE_W,SDL_SCANCODE_S);
+                secondPlayer.angle = angle_from_keyboard_and_player(secondPlayer, SDL_SCANCODE_A, SDL_SCANCODE_D);
+            }
             PlayerCharacter secondPlayerUpdated = secondPlayer.next_state(TICK_TIME);
 
-            auto players = updatePlayersIfCollision(firstPlayer, secondPlayer, firstPlayerUpdated, secondPlayerUpdated, playerSize);
-            firstPlayer = updatePlayerIfWallCollision(players.first, playerSize);
-            secondPlayer = updatePlayerIfWallCollision(players.second, playerSize);
+            if(!firstPlayerDied && !secondPlayerDied) {
+                auto players = updatePlayersIfCollision(firstPlayer, secondPlayer, firstPlayerUpdated, secondPlayerUpdated, playerSize);
+                firstPlayer = updatePlayerIfWallCollision(players.first, playerSize);
+                secondPlayer = updatePlayerIfWallCollision(players.second, playerSize);
+            } else if(!firstPlayerDied) {
+                firstPlayer = updatePlayerIfWallCollision(firstPlayerUpdated, playerSize);
+            } else if(!secondPlayerDied) {
+                secondPlayer = updatePlayerIfWallCollision(secondPlayerUpdated, playerSize);
+            }
         }
 
         {
@@ -204,7 +225,58 @@ void play_the_game(SDL_Renderer *renderer) {
             }
         }
 
+        {
+            if(playerFellIntoHole(firstPlayer, playerSize, holeSize)) {
+                firstPlayer.points = firstPlayer.points - 3;
+                if(firstPlayer.points < 0) {
+                    firstPlayer.points = 0;
+                }
+                firstPlayerDied = true;
+                firstPlayer.position = {FAKE_POSITION_IF_FELL, FAKE_POSITION_IF_FELL};
+                time(&firstPlayerDeathTime);
+            }
+
+            if(playerFellIntoHole(secondPlayer, playerSize, holeSize)) {
+                secondPlayer.points = secondPlayer.points - 3;
+                if(secondPlayer.points < 0) {
+                    secondPlayer.points = 0;
+                }
+                secondPlayerDied = true;
+                secondPlayer.position = {FAKE_POSITION_IF_FELL, FAKE_POSITION_IF_FELL};
+                time(&secondPlayerDeathTime);
+            }
+        }
+
+        {
+            if(firstPlayerDied) {
+                time(&currentTime);
+                int timeElapsedInSeconds = difftime (currentTime, firstPlayerDeathTime);
+                if(timeElapsedInSeconds >= TIME_TO_RESPAWN_AFTER_DEATH_IN_SECONDS) {
+                    firstPlayerDied = false;
+                    firstPlayer.position = {300.0, 200.0};
+                }
+            }
+
+            if(secondPlayerDied) {
+                time(&currentTime);
+                int timeElapsedInSeconds = difftime (currentTime, secondPlayerDeathTime);
+                if(timeElapsedInSeconds >= TIME_TO_RESPAWN_AFTER_DEATH_IN_SECONDS) {
+                    secondPlayerDied = false;
+                    secondPlayer.position = {400.0, 200.0};
+                }
+            }
+        }
+
         SDL_RenderCopy(renderer, background.get(), nullptr, nullptr);
+
+        for(int i = 0; i < HOLES_AMOUNT; i++) {
+            auto rect = holeRect;
+            rect.x = HOLES_POSITIONS[i][0] - rect.w / 2;
+            rect.y = HOLES_POSITIONS[i][1] - rect.h / 2;
+            SDL_RenderCopyEx(renderer, hole_texture.get(),
+                             nullptr, &rect, 0,
+                             nullptr, SDL_FLIP_NONE);
+        }
 
         for(int i = 0; i < dustAmount; i++) {
             auto rect = dustRect;
@@ -215,7 +287,7 @@ void play_the_game(SDL_Renderer *renderer) {
                              nullptr, SDL_FLIP_NONE);
         }
 
-        {
+        if(!firstPlayerDied){
             auto rect = firstPlayerRect;
 
             rect.x = firstPlayer.position[0] - rect.w / 2;
@@ -225,7 +297,7 @@ void play_the_game(SDL_Renderer *renderer) {
                              nullptr, SDL_FLIP_NONE);
         }
 
-        {
+        if(!secondPlayerDied){
             auto rect = secondPlayerRect;
 
             rect.x = secondPlayer.position[0] - rect.w / 2;
@@ -348,10 +420,10 @@ void play_the_game(SDL_Renderer *renderer) {
             switch (sdlEvent.type) {
                 case SDL_QUIT:
                     gaming = false;
-                    break;
+                    return;
                 case SDL_KEYDOWN:
                     if (sdlEvent.key.keysym.sym == SDLK_q) gaming = false;
-                    break;
+                    return;
             }
         }
 
@@ -410,6 +482,15 @@ bool playerScored(PlayerCharacter playerCharacter, vec2d dustPositions[20], int 
 
 void spawnDust(vec2d dustPositions[20], int dustIndex, int dustSize) {
     dustPositions[dustIndex] = {static_cast<double>(rand() % (PLAYGROUND_WIDTH - dustSize) + dustSize / 2), static_cast<double>(rand() % (PLAYGROUND_WIDTH - dustSize) + dustSize / 2)};
+}
+
+bool playerFellIntoHole(PlayerCharacter playerCharacter, int playerSize, int holeSize) {
+    for(int i = 0; i < HOLES_AMOUNT; i++) {
+        if(playerCharacter.getDistance(HOLES_POSITIONS[i]) < holeSize - playerSize) {
+            return true;
+        }
+    }
+    return false;
 }
 
 std::pair<PlayerCharacter, PlayerCharacter> updatePlayersIfCollision(PlayerCharacter firstPlayer, PlayerCharacter secondPlayer, PlayerCharacter firstPlayerUpdated,
