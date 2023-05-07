@@ -18,6 +18,7 @@ public:
     vec2d velocity;
     vec2d acceleration;
     int points;
+    int ticksTillTurboStopsWorking;
 
     PlayerCharacter next_state(double dt_ms) {
         double dt = dt_ms / 1000.0;
@@ -31,6 +32,11 @@ public:
         next.position = position + velocity * dt + (a * dt * dt) / 2;
         next.velocity = velocity + a * dt;
         next.acceleration = a;
+        if(ticksTillTurboStopsWorking > 0) {
+            next.ticksTillTurboStopsWorking = ticksTillTurboStopsWorking - 1;
+        } else {
+            next.ticksTillTurboStopsWorking = 0;
+        }
 
         return next;
     }
@@ -41,6 +47,13 @@ public:
 
     double getDistance(vec2d comparedPosition) {
         return sqrt(pow((comparedPosition[0] - this->position[0]), 2) + pow((comparedPosition[1] - this->position[1]), 2));
+    }
+
+    bool gotTurbo(vec2d turboPosition, int turboWidth, int turboHeight, int playerSize) {
+        return position[0] > turboPosition[0] - playerSize / 2
+            && position[1] > turboPosition[1] - playerSize / 2
+            && position[0] < turboPosition[0] + turboWidth - playerSize / 2
+            && position[1] < turboPosition[1] + turboHeight - playerSize / 2;
     }
 };
 

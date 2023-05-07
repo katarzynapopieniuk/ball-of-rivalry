@@ -18,6 +18,7 @@
 #define WINDOW_WIDTH 650
 #define WINDOW_HEIGHT 870
 #define MAX_DUST_AMOUNT 20
+#define MAX_TURBO_AMOUNT 5
 #define WINNER_PLAYER_NUMBER_HEIGHT 140
 #define WINNER_PLAYER_NUMBER_WIDTH 410
 
@@ -37,6 +38,8 @@ const int TOTAL_GAME_TIME_IN_SECONDS = 90;
 const int HOLES_AMOUNT = 4;
 const int TIME_TO_RESPAWN_AFTER_DEATH_IN_SECONDS = 3;
 const int FAKE_POSITION_IF_FELL = -99999;
+const int TURBO_SPAWN_TICKS = 500;
+const int TURBO_WORKING_TICKS = 300;
 const vec2d HOLES_POSITIONS[] = {{80, 380}, {500, 380}, {100, 100}, {480, 100}};
 
 std::pair<PlayerCharacter, PlayerCharacter> updatePlayersIfCollision(PlayerCharacter firstPlayer, PlayerCharacter secondPlayer,
@@ -46,10 +49,14 @@ PlayerCharacter updatePlayerIfWallCollision(PlayerCharacter playerCharacter, int
 
 void spawnDust(vec2d dustPositions[20], int dustIndex, int dustSize) ;
 
+void spawnTurbo(vec2d turboPositions[MAX_TURBO_AMOUNT], int turboIndex, int turboWidth, int turboHeight);
+
 bool
 playerScored(PlayerCharacter playerCharacter, vec2d dustPositions[20], int dustAmount, int playerSize, int dustSize);
 
 bool playerFellIntoHole(PlayerCharacter playerCharacter, int playerSize, int holeSize);
+
+bool playerGotTurbo(PlayerCharacter playerCharacter, vec2d turboPositions[MAX_TURBO_AMOUNT], int turboAmount, int playerSize, int turboWidth, int turboHeight);
 
 std::shared_ptr<SDL_Texture> load_texture(SDL_Renderer *renderer, const std::string& fname) {
     SDL_Surface *bmpSurface = SDL_LoadBMP(("assets/" + fname).c_str());
@@ -99,6 +106,9 @@ acceleration_vector_from_keyboard_and_player(const PlayerCharacter &player, SDL_
     if (keyboard_state[scanCodeBack]) {
         acceleration = acceleration - forward_vec;
     }
+    if(player.ticksTillTurboStopsWorking > 0) {
+        return acceleration*3000.0;
+    }
     return acceleration*1500.0;
 }
 
@@ -119,6 +129,7 @@ void play_the_game(SDL_Renderer *renderer) {
     auto scoreboard_texture = load_texture(renderer, "scoreboard.bmp");
     auto tieboard_texture = load_texture(renderer, "tieboard.bmp");
     auto winnerboard_texture = load_texture(renderer, "winnerboard.bmp");
+    auto turbo_texture = load_texture(renderer, "turbo.bmp");
     auto number0_texture = load_texture(renderer, "number0.bmp");
     auto number1_texture = load_texture(renderer, "number1.bmp");
     auto number2_texture = load_texture(renderer, "number2.bmp");
@@ -141,6 +152,7 @@ void play_the_game(SDL_Renderer *renderer) {
     SDL_Rect tieboardRect = get_texture_rect(tieboard_texture);
     SDL_Rect winnerboardRect = get_texture_rect(winnerboard_texture);
     SDL_Rect holeRect = get_texture_rect(hole_texture);
+    SDL_Rect turboRect = get_texture_rect(turbo_texture);
 
     SDL_Rect numberRects[10];
     for(int i=0; i<10; i++) {
@@ -153,8 +165,11 @@ void play_the_game(SDL_Renderer *renderer) {
     int gaming = true;
     auto prev_tick = SDL_GetTicks();
     int ticksTillNextDustSpawn = DUST_SPAWN_TICKS;
+    int ticksTillNextTurboSpawn = TURBO_SPAWN_TICKS;
     vec2d dustPositions[MAX_DUST_AMOUNT] = {};
+    vec2d turboPositions[MAX_TURBO_AMOUNT] = {};
     int dustAmount = 0;
+    int turboAmount = 0;
     int dustSize = dustRect.w;
     int holeSize = holeRect.w;
     time_t startTime, currentTime, firstPlayerDeathTime, secondPlayerDeathTime;
@@ -184,6 +199,17 @@ void play_the_game(SDL_Renderer *renderer) {
                 if(dustAmount < MAX_DUST_AMOUNT) {
                     spawnDust(dustPositions, dustAmount, dustSize);
                     dustAmount ++;
+                }
+            }
+        }
+
+        {
+            ticksTillNextTurboSpawn--;
+            if(ticksTillNextTurboSpawn == 0) {
+                ticksTillNextTurboSpawn = TURBO_SPAWN_TICKS;
+                if(turboAmount < MAX_TURBO_AMOUNT) {
+                    spawnTurbo(turboPositions, turboAmount, turboRect.w, turboRect.h);
+                    turboAmount ++;
                 }
             }
         }
@@ -222,6 +248,18 @@ void play_the_game(SDL_Renderer *renderer) {
             if(playerScored(secondPlayer, dustPositions, dustAmount, playerSize, dustSize)) {
                 secondPlayer.points = secondPlayer.points + 1;
                 dustAmount--;
+            }
+        }
+
+        {
+            if(playerGotTurbo(firstPlayer, turboPositions, turboAmount, playerSize, turboRect.w, turboRect.h)) {
+                firstPlayer.ticksTillTurboStopsWorking = TURBO_WORKING_TICKS;
+                turboAmount--;
+            }
+
+            if(playerGotTurbo(secondPlayer, turboPositions, turboAmount, playerSize, turboRect.w, turboRect.h)) {
+                secondPlayer.ticksTillTurboStopsWorking = TURBO_WORKING_TICKS;
+                turboAmount--;
             }
         }
 
@@ -289,6 +327,15 @@ void play_the_game(SDL_Renderer *renderer) {
             rect.x = dustPositions[i][0] - rect.w / 2;
             rect.y = dustPositions[i][1] - rect.h / 2;
             SDL_RenderCopyEx(renderer, dust_texture.get(),
+                             nullptr, &rect, 0,
+                             nullptr, SDL_FLIP_NONE);
+        }
+
+        for(int i = 0; i < turboAmount; i++) {
+            auto rect = turboRect;
+            rect.x = turboPositions[i][0] - rect.w / 2;
+            rect.y = turboPositions[i][1] - rect.h / 2;
+            SDL_RenderCopyEx(renderer, turbo_texture.get(),
                              nullptr, &rect, 0,
                              nullptr, SDL_FLIP_NONE);
         }
@@ -473,7 +520,7 @@ void play_the_game(SDL_Renderer *renderer) {
     }
 }
 
-bool playerScored(PlayerCharacter playerCharacter, vec2d dustPositions[20], int dustAmount, int playerSize, int dustSize) {
+bool playerScored(PlayerCharacter playerCharacter, vec2d dustPositions[MAX_DUST_AMOUNT], int dustAmount, int playerSize, int dustSize) {
     for(int i = 0; i < dustAmount; i++) {
         if(playerCharacter.getDistance(dustPositions[i]) < playerSize - dustSize) {
             for(int j = i; j < dustAmount-1; j++) {
@@ -486,8 +533,25 @@ bool playerScored(PlayerCharacter playerCharacter, vec2d dustPositions[20], int 
     return false;
 }
 
-void spawnDust(vec2d dustPositions[20], int dustIndex, int dustSize) {
+bool playerGotTurbo(PlayerCharacter playerCharacter, vec2d turboPositions[MAX_TURBO_AMOUNT], int turboAmount, int playerSize, int turboWidth, int turboHeight) {
+    for(int i = 0; i < turboAmount; i++) {
+        if(playerCharacter.gotTurbo(turboPositions[i], turboWidth, turboHeight, playerSize)) {
+            for(int j = i; j < turboAmount-1; j++) {
+                turboPositions[j] = turboPositions[j+1];
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void spawnDust(vec2d dustPositions[MAX_DUST_AMOUNT], int dustIndex, int dustSize) {
     dustPositions[dustIndex] = {static_cast<double>(rand() % (PLAYGROUND_WIDTH - dustSize) + dustSize / 2), static_cast<double>(rand() % (PLAYGROUND_WIDTH - dustSize) + dustSize / 2)};
+}
+
+void spawnTurbo(vec2d turboPositions[MAX_TURBO_AMOUNT], int turboIndex, int turboWidth, int turboHeight) {
+    turboPositions[turboIndex] = {static_cast<double>(rand() % (PLAYGROUND_WIDTH - turboWidth) + turboWidth / 2), static_cast<double>(rand() % (PLAYGROUND_WIDTH - turboHeight) + turboHeight / 2)};
 }
 
 bool playerFellIntoHole(PlayerCharacter playerCharacter, int playerSize, int holeSize) {
