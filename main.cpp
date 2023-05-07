@@ -34,10 +34,10 @@ const int LEFT_SCORE_START_WIDTH = 260;
 const int RIGHT_SCORE_START_WIDTH = 350;
 const int SCORE_JUMP = 50;
 const int TOTAL_GAME_TIME_IN_SECONDS = 90;
-const int HOLES_AMOUNT = 2;
+const int HOLES_AMOUNT = 4;
 const int TIME_TO_RESPAWN_AFTER_DEATH_IN_SECONDS = 3;
 const int FAKE_POSITION_IF_FELL = -99999;
-const vec2d HOLES_POSITIONS[] = {{80, 400}, {500, 400}};
+const vec2d HOLES_POSITIONS[] = {{80, 380}, {500, 380}, {100, 100}, {480, 100}};
 
 std::pair<PlayerCharacter, PlayerCharacter> updatePlayersIfCollision(PlayerCharacter firstPlayer, PlayerCharacter secondPlayer,
                                                                      PlayerCharacter firstPlayerUpdated, PlayerCharacter secondPlayerUpdated, int playerSize);
@@ -148,8 +148,8 @@ void play_the_game(SDL_Renderer *renderer) {
     }
 
     auto playerSize = firstPlayerRect.w;
-    PlayerCharacter firstPlayer = {0, {300.0, 200.0}};
-    PlayerCharacter secondPlayer = {0, {400.0, 200.0}};
+    PlayerCharacter firstPlayer = {0, {400.0, 200.0}};
+    PlayerCharacter secondPlayer = {0, {250.0, 200.0}};
     int gaming = true;
     auto prev_tick = SDL_GetTicks();
     int ticksTillNextDustSpawn = DUST_SPAWN_TICKS;
@@ -253,7 +253,10 @@ void play_the_game(SDL_Renderer *renderer) {
                 int timeElapsedInSeconds = difftime (currentTime, firstPlayerDeathTime);
                 if(timeElapsedInSeconds >= TIME_TO_RESPAWN_AFTER_DEATH_IN_SECONDS) {
                     firstPlayerDied = false;
-                    firstPlayer.position = {300.0, 200.0};
+                    firstPlayer.position = {400.0, 200.0};
+                    if(firstPlayer.getDistance(secondPlayer) < playerSize) {
+                        firstPlayer.position = {250.0, 200.0};
+                    }
                 }
             }
 
@@ -262,7 +265,10 @@ void play_the_game(SDL_Renderer *renderer) {
                 int timeElapsedInSeconds = difftime (currentTime, secondPlayerDeathTime);
                 if(timeElapsedInSeconds >= TIME_TO_RESPAWN_AFTER_DEATH_IN_SECONDS) {
                     secondPlayerDied = false;
-                    secondPlayer.position = {400.0, 200.0};
+                    secondPlayer.position = {250.0, 200.0};
+                    if(secondPlayer.getDistance(firstPlayer) < playerSize) {
+                        secondPlayer.position = {400.0, 200.0};
+                    }
                 }
             }
         }
