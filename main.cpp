@@ -21,9 +21,12 @@
 #define MAX_TURBO_AMOUNT 5
 #define WINNER_PLAYER_NUMBER_HEIGHT 140
 #define WINNER_PLAYER_NUMBER_WIDTH 410
+#define MAX_BUBBLES_ON_MAP 10
+#define BUBBLE_LIFE_TICKS 20
 
 #include <SDL.h>
 #include "operator_definitions.h"
+#include "Bubble.h"
 #include <stdlib.h>     /* srand, rand */
 #include <time.h>       /* time */
 
@@ -40,6 +43,7 @@ const int TIME_TO_RESPAWN_AFTER_DEATH_IN_SECONDS = 3;
 const int FAKE_POSITION_IF_FELL = -99999;
 const int TURBO_SPAWN_TICKS = 500;
 const int TURBO_WORKING_TICKS = 300;
+const int BUBBLE_SPAWN_TICKS = 5;
 const vec2d HOLES_POSITIONS[] = {{80, 380}, {500, 380}, {100, 100}, {480, 100}};
 
 std::pair<PlayerCharacter, PlayerCharacter> updatePlayersIfCollision(PlayerCharacter firstPlayer, PlayerCharacter secondPlayer,
@@ -57,6 +61,10 @@ playerScored(PlayerCharacter playerCharacter, vec2d dustPositions[20], int dustA
 bool playerFellIntoHole(PlayerCharacter playerCharacter, int playerSize, int holeSize);
 
 bool playerGotTurbo(PlayerCharacter playerCharacter, vec2d turboPositions[MAX_TURBO_AMOUNT], int turboAmount, int playerSize, int turboWidth, int turboHeight);
+
+void spawnBubble(Bubble bubbles[10], int bubbleIndex, PlayerCharacter player, int playerSize, int bubbleSize);
+
+int clearDeadBubblesAndGetBubbleAmount(Bubble bubbles[MAX_BUBBLES_ON_MAP], int bubbleAmount);
 
 std::shared_ptr<SDL_Texture> load_texture(SDL_Renderer *renderer, const std::string& fname) {
     SDL_Surface *bmpSurface = SDL_LoadBMP(("assets/" + fname).c_str());
@@ -126,6 +134,7 @@ void play_the_game(SDL_Renderer *renderer) {
     auto background = load_texture(renderer, "wooden_floor.bmp");
     auto hole_texture = load_texture(renderer, "hole.bmp");
     auto dust_texture = load_texture(renderer, "dust.bmp");
+    auto bubble_texture = load_texture(renderer, "bubble.bmp");
     auto scoreboard_texture = load_texture(renderer, "scoreboard.bmp");
     auto tieboard_texture = load_texture(renderer, "tieboard.bmp");
     auto winnerboard_texture = load_texture(renderer, "winnerboard.bmp");
@@ -153,6 +162,7 @@ void play_the_game(SDL_Renderer *renderer) {
     SDL_Rect winnerboardRect = get_texture_rect(winnerboard_texture);
     SDL_Rect holeRect = get_texture_rect(hole_texture);
     SDL_Rect turboRect = get_texture_rect(turbo_texture);
+    SDL_Rect bubbleRect = get_texture_rect(bubble_texture);
 
     SDL_Rect numberRects[10];
     for(int i=0; i<10; i++) {
@@ -166,12 +176,17 @@ void play_the_game(SDL_Renderer *renderer) {
     auto prev_tick = SDL_GetTicks();
     int ticksTillNextDustSpawn = DUST_SPAWN_TICKS;
     int ticksTillNextTurboSpawn = TURBO_SPAWN_TICKS;
+    int ticksTillNextFirstPlayerBubble = 0;
+    int ticksTillNextSecondPlayerBubble = 0;
     vec2d dustPositions[MAX_DUST_AMOUNT] = {};
     vec2d turboPositions[MAX_TURBO_AMOUNT] = {};
+    Bubble bubbles[MAX_BUBBLES_ON_MAP] = {};
     int dustAmount = 0;
     int turboAmount = 0;
+    int bubbleAmount = 0;
     int dustSize = dustRect.w;
     int holeSize = holeRect.w;
+    int bubbleSize = bubbleRect.w;
     time_t startTime, currentTime, firstPlayerDeathTime, secondPlayerDeathTime;
     time (&startTime);
     srand ((unsigned)time(NULL));
@@ -255,11 +270,13 @@ void play_the_game(SDL_Renderer *renderer) {
             if(playerGotTurbo(firstPlayer, turboPositions, turboAmount, playerSize, turboRect.w, turboRect.h)) {
                 firstPlayer.ticksTillTurboStopsWorking = TURBO_WORKING_TICKS;
                 turboAmount--;
+                ticksTillNextFirstPlayerBubble = 0;
             }
 
             if(playerGotTurbo(secondPlayer, turboPositions, turboAmount, playerSize, turboRect.w, turboRect.h)) {
                 secondPlayer.ticksTillTurboStopsWorking = TURBO_WORKING_TICKS;
                 turboAmount--;
+                ticksTillNextSecondPlayerBubble = 0;
             }
         }
 
@@ -285,6 +302,27 @@ void play_the_game(SDL_Renderer *renderer) {
             }
         }
 
+        if(firstPlayer.ticksTillTurboStopsWorking > 0) {
+            if(ticksTillNextFirstPlayerBubble <= 0 && bubbleAmount < MAX_BUBBLES_ON_MAP) {
+                spawnBubble(bubbles, bubbleAmount, firstPlayer, playerSize, bubbleSize);
+                ticksTillNextFirstPlayerBubble = BUBBLE_SPAWN_TICKS;
+                bubbleAmount++;
+            } else {
+                ticksTillNextFirstPlayerBubble--;
+            }
+        }
+
+        if(secondPlayer.ticksTillTurboStopsWorking > 0) {
+            if(ticksTillNextSecondPlayerBubble <= 0 && bubbleAmount < MAX_BUBBLES_ON_MAP) {
+                spawnBubble(bubbles, bubbleAmount, secondPlayer, playerSize, bubbleSize);
+                ticksTillNextSecondPlayerBubble = BUBBLE_SPAWN_TICKS;
+                bubbleAmount++;
+            } else {
+                ticksTillNextSecondPlayerBubble--;
+            }
+        }
+        bubbleAmount = clearDeadBubblesAndGetBubbleAmount(bubbles, bubbleAmount);
+
         {
             if(firstPlayerDied) {
                 time(&currentTime);
@@ -308,6 +346,10 @@ void play_the_game(SDL_Renderer *renderer) {
                         secondPlayer.position = {400.0, 200.0};
                     }
                 }
+            }
+
+            for(int i = 0; i < bubbleAmount; i++) {
+                bubbles[i] = bubbles[i].next_state(TICK_TIME);
             }
         }
 
@@ -357,6 +399,15 @@ void play_the_game(SDL_Renderer *renderer) {
             rect.y = secondPlayer.position[1] - rect.h / 2;
             SDL_RenderCopyEx(renderer, secondPlayerTexture.get(),
                              nullptr, &rect, 180.0 * secondPlayer.angle / M_PI,
+                             nullptr, SDL_FLIP_NONE);
+        }
+
+        for(int i = 0; i < bubbleAmount; i++) {
+            auto rect = bubbleRect;
+            rect.x = bubbles[i].position[0] - rect.w / 2;
+            rect.y = bubbles[i].position[1] - rect.h / 2;
+            SDL_RenderCopyEx(renderer, bubble_texture.get(),
+                             nullptr, &rect, 0,
                              nullptr, SDL_FLIP_NONE);
         }
 
@@ -518,6 +569,26 @@ void play_the_game(SDL_Renderer *renderer) {
 
         SDL_RenderPresent(renderer);
     }
+}
+
+void spawnBubble(Bubble bubbles[MAX_BUBBLES_ON_MAP], int bubbleIndex, PlayerCharacter player, int playerSize, int bubbleSize) {
+    Bubble bubble = {};
+    bubble.setPositionBehindPlayer(player, playerSize, bubbleSize);
+    bubble.velocity = player.velocity * (-0.25);
+    bubble.ticksTillDisappear = BUBBLE_LIFE_TICKS;
+    bubbles[bubbleIndex] = bubble;
+}
+
+int clearDeadBubblesAndGetBubbleAmount(Bubble bubbles[MAX_BUBBLES_ON_MAP], int bubbleAmount) {
+    for(int i = 0; i < bubbleAmount; i++) {
+        if(bubbles[i].ticksTillDisappear <= 0) {
+            for(int j = i; j < bubbleAmount-1; j++) {
+                bubbles[j] = bubbles[j+1];
+            }
+            bubbleAmount--;
+        }
+    }
+    return bubbleAmount;
 }
 
 bool playerScored(PlayerCharacter playerCharacter, vec2d dustPositions[MAX_DUST_AMOUNT], int dustAmount, int playerSize, int dustSize) {
