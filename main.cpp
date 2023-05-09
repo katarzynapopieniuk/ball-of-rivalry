@@ -21,8 +21,8 @@
 #define MAX_TURBO_AMOUNT 5
 #define WINNER_PLAYER_NUMBER_HEIGHT 140
 #define WINNER_PLAYER_NUMBER_WIDTH 410
-#define MAX_BUBBLES_ON_MAP 10
-#define BUBBLE_LIFE_TICKS 20
+#define MAX_BUBBLES_ON_MAP 30
+#define BUBBLE_LIFE_TICKS 10
 
 #include <SDL.h>
 #include "operator_definitions.h"
@@ -43,7 +43,7 @@ const int TIME_TO_RESPAWN_AFTER_DEATH_IN_SECONDS = 3;
 const int FAKE_POSITION_IF_FELL = -99999;
 const int TURBO_SPAWN_TICKS = 500;
 const int TURBO_WORKING_TICKS = 300;
-const int BUBBLE_SPAWN_TICKS = 5;
+const int BUBBLE_SPAWN_TICKS = 1;
 const vec2d HOLES_POSITIONS[] = {{80, 380}, {500, 380}, {100, 100}, {480, 100}};
 
 std::pair<PlayerCharacter, PlayerCharacter> updatePlayersIfCollision(PlayerCharacter firstPlayer, PlayerCharacter secondPlayer,
@@ -115,7 +115,7 @@ acceleration_vector_from_keyboard_and_player(const PlayerCharacter &player, SDL_
         acceleration = acceleration - forward_vec;
     }
     if(player.ticksTillTurboStopsWorking > 0) {
-        return acceleration*3000.0;
+        return acceleration*4000.0;
     }
     return acceleration*1500.0;
 }
@@ -618,11 +618,11 @@ bool playerGotTurbo(PlayerCharacter playerCharacter, vec2d turboPositions[MAX_TU
 }
 
 void spawnDust(vec2d dustPositions[MAX_DUST_AMOUNT], int dustIndex, int dustSize) {
-    dustPositions[dustIndex] = {static_cast<double>(rand() % (PLAYGROUND_WIDTH - dustSize) + dustSize / 2), static_cast<double>(rand() % (PLAYGROUND_WIDTH - dustSize) + dustSize / 2)};
+    dustPositions[dustIndex] = {static_cast<double>(rand() % (PLAYGROUND_WIDTH - dustSize) + dustSize / 2), static_cast<double>(rand() % (PLAYGROUND_HEIGHT - dustSize) + dustSize / 2)};
 }
 
 void spawnTurbo(vec2d turboPositions[MAX_TURBO_AMOUNT], int turboIndex, int turboWidth, int turboHeight) {
-    turboPositions[turboIndex] = {static_cast<double>(rand() % (PLAYGROUND_WIDTH - turboWidth) + turboWidth / 2), static_cast<double>(rand() % (PLAYGROUND_WIDTH - turboHeight) + turboHeight / 2)};
+    turboPositions[turboIndex] = {static_cast<double>(rand() % (PLAYGROUND_WIDTH - turboWidth) + turboWidth / 2), static_cast<double>(rand() % (PLAYGROUND_HEIGHT - turboHeight) + turboHeight / 2)};
 }
 
 bool playerFellIntoHole(PlayerCharacter playerCharacter, int playerSize, int holeSize) {

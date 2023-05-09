@@ -26,9 +26,11 @@ public:
     void setPositionBehindPlayer(PlayerCharacter player, int playerSize, int bubbleSize) {
         vec2d playerVector = angle_to_vector(player.angle);
         position = player.position;
-        position[0] = position[0] + playerSize/2;
-        position[1] = position[1] + playerSize/2;
+        position[0] = position[0];
+        position[1] = position[1];
         position = position - playerVector * playerSize;
+        vec2d otherVector = {-playerVector[1], playerVector[0]};
+        position = position + otherVector * (rand() % 100 - 50) / 4;
     }
 
 private:
