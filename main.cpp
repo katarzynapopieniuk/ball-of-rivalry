@@ -9,6 +9,7 @@
 #include <memory>
 #include <array>
 #include <cmath>
+#include <sdl_mixer.h>
 
 #define SDL_MAIN_HANDLED
 #define PLAYGROUND_WIDTH 650
@@ -183,6 +184,9 @@ void play_the_game(SDL_Renderer *renderer) {
         numberRects[i] = get_texture_rect(numberTextures[i]);
     }
 
+    Mix_Chunk *dustSuckSound = Mix_LoadWAV("./assets/mixkit-air-zoom-vacuum-2608.wav");
+    Mix_Chunk *turboSound = Mix_LoadWAV("./assets/mixkit-cinematic-laser-gun-thunder-1287.wav");
+
     auto playerSize = firstPlayerRect.w;
     PlayerCharacter firstPlayer = {0, {400.0, 200.0}};
     PlayerCharacter secondPlayer = {0, {250.0, 200.0}};
@@ -282,11 +286,13 @@ void play_the_game(SDL_Renderer *renderer) {
                 if (playerScored(firstPlayer, dustPositions, dustAmount, playerSize, dustSize)) {
                     firstPlayer.points = firstPlayer.points + 1;
                     dustAmount--;
+                    Mix_PlayChannel(-1, dustSuckSound, 0);
                 }
 
                 if (playerScored(secondPlayer, dustPositions, dustAmount, playerSize, dustSize)) {
                     secondPlayer.points = secondPlayer.points + 1;
                     dustAmount--;
+                    Mix_PlayChannel(-1, dustSuckSound, 0);
                 }
             }
 
@@ -295,12 +301,14 @@ void play_the_game(SDL_Renderer *renderer) {
                     firstPlayer.ticksTillTurboStopsWorking = TURBO_WORKING_TICKS;
                     turboAmount--;
                     ticksTillNextFirstPlayerBubble = 0;
+                    Mix_PlayChannel(-1, turboSound, 0);
                 }
 
                 if (playerGotTurbo(secondPlayer, turboPositions, turboAmount, playerSize, turboRect.w, turboRect.h)) {
                     secondPlayer.ticksTillTurboStopsWorking = TURBO_WORKING_TICKS;
                     turboAmount--;
                     ticksTillNextSecondPlayerBubble = 0;
+                    Mix_PlayChannel(-1, turboSound, 0);
                 }
             }
 
@@ -572,6 +580,9 @@ void play_the_game(SDL_Renderer *renderer) {
             while (SDL_PollEvent(&sdlEvent) != 0) {
                 switch (sdlEvent.type) {
                     case SDL_QUIT:
+                        Mix_FreeChunk(dustSuckSound);
+                        Mix_FreeChunk(turboSound);
+                        Mix_CloseAudio();
                         return;
                     case SDL_KEYDOWN:
                         if(sdlEvent.key.keysym.sym == SDLK_UP || sdlEvent.key.keysym.sym == SDLK_DOWN) {
@@ -593,6 +604,9 @@ void play_the_game(SDL_Renderer *renderer) {
                                 secondPlayerDied = false;
                                 break;
                             } else {
+                                Mix_FreeChunk(dustSuckSound);
+                                Mix_FreeChunk(turboSound);
+                                Mix_CloseAudio();
                                 return;
                             }
                         }
@@ -771,6 +785,17 @@ PlayerCharacter updatePlayerIfWallCollision(PlayerCharacter playerCharacter, int
 
 int main() {
     SDL_Init(SDL_INIT_EVERYTHING);
+    Mix_Init(0);
+    int openAudioRes = Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 1024);
+    if(openAudioRes < 0) {
+        std::cout << "Open audio failed";
+    }
+    int allocateChannelsRes = Mix_AllocateChannels(4);
+    if( allocateChannelsRes < 0 )
+    {
+        fprintf(stderr, "Unable to allocate mixing channels: %s\n", SDL_GetError());
+        exit(-1);
+    }
     SDL_Window *window;
     SDL_Renderer *renderer;
     SDL_CreateWindowAndRenderer(WINDOW_WIDTH, WINDOW_HEIGHT,
