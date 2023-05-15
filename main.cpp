@@ -9,6 +9,7 @@
 #include <memory>
 #include <array>
 #include <cmath>
+#include <sdl_mixer.h>
 
 #define SDL_MAIN_HANDLED
 #define PLAYGROUND_WIDTH 650
@@ -55,7 +56,7 @@ updatePlayersIfCollision(PlayerCharacter firstPlayer, PlayerCharacter secondPlay
 
 PlayerCharacter updatePlayerIfWallCollision(PlayerCharacter playerCharacter, int i);
 
-void spawnDust(vec2d dustPositions[20], int dustIndex, int dustSize);
+void spawnDust(vec2d dustPositions[20], int dustIndex, int dustSize, int holeSize);
 
 void spawnTurbo(vec2d turboPositions[MAX_TURBO_AMOUNT], int turboIndex, int turboWidth, int turboHeight);
 
@@ -71,6 +72,10 @@ playerGotTurbo(PlayerCharacter playerCharacter, vec2d turboPositions[MAX_TURBO_A
 void spawnBubble(Bubble bubbles[10], int bubbleIndex, PlayerCharacter player, int playerSize, int bubbleSize);
 
 int clearDeadBubblesAndGetBubbleAmount(Bubble bubbles[MAX_BUBBLES_ON_MAP], int bubbleAmount);
+
+bool isNewDustOnHole(vec2d dustPosition, int holeSize);
+
+double getDistance(vec2d basePosition, vec2d comparedPosition);
 
 std::shared_ptr<SDL_Texture> load_texture(SDL_Renderer *renderer, const std::string &fname) {
     SDL_Surface *bmpSurface = SDL_LoadBMP(("assets/" + fname).c_str());
@@ -183,6 +188,9 @@ void play_the_game(SDL_Renderer *renderer) {
         numberRects[i] = get_texture_rect(numberTextures[i]);
     }
 
+    Mix_Chunk *dustSuckSound = Mix_LoadWAV("./assets/mixkit-air-zoom-vacuum-2608.wav");
+    Mix_Chunk *turboSound = Mix_LoadWAV("./assets/mixkit-cinematic-laser-gun-thunder-1287.wav");
+
     auto playerSize = firstPlayerRect.w;
     PlayerCharacter firstPlayer = {0, {400.0, 200.0}};
     PlayerCharacter secondPlayer = {0, {250.0, 200.0}};
@@ -230,7 +238,7 @@ void play_the_game(SDL_Renderer *renderer) {
                 if (ticksTillNextDustSpawn == 0) {
                     ticksTillNextDustSpawn = DUST_SPAWN_TICKS;
                     if (dustAmount < MAX_DUST_AMOUNT) {
-                        spawnDust(dustPositions, dustAmount, dustSize);
+                        spawnDust(dustPositions, dustAmount, dustSize, holeSize);
                         dustAmount++;
                     }
                 }
@@ -282,11 +290,13 @@ void play_the_game(SDL_Renderer *renderer) {
                 if (playerScored(firstPlayer, dustPositions, dustAmount, playerSize, dustSize)) {
                     firstPlayer.points = firstPlayer.points + 1;
                     dustAmount--;
+                    Mix_PlayChannel(-1, dustSuckSound, 0);
                 }
 
                 if (playerScored(secondPlayer, dustPositions, dustAmount, playerSize, dustSize)) {
                     secondPlayer.points = secondPlayer.points + 1;
                     dustAmount--;
+                    Mix_PlayChannel(-1, dustSuckSound, 0);
                 }
             }
 
@@ -295,12 +305,14 @@ void play_the_game(SDL_Renderer *renderer) {
                     firstPlayer.ticksTillTurboStopsWorking = TURBO_WORKING_TICKS;
                     turboAmount--;
                     ticksTillNextFirstPlayerBubble = 0;
+                    Mix_PlayChannel(-1, turboSound, 0);
                 }
 
                 if (playerGotTurbo(secondPlayer, turboPositions, turboAmount, playerSize, turboRect.w, turboRect.h)) {
                     secondPlayer.ticksTillTurboStopsWorking = TURBO_WORKING_TICKS;
                     turboAmount--;
                     ticksTillNextSecondPlayerBubble = 0;
+                    Mix_PlayChannel(-1, turboSound, 0);
                 }
             }
 
@@ -572,6 +584,9 @@ void play_the_game(SDL_Renderer *renderer) {
             while (SDL_PollEvent(&sdlEvent) != 0) {
                 switch (sdlEvent.type) {
                     case SDL_QUIT:
+                        Mix_FreeChunk(dustSuckSound);
+                        Mix_FreeChunk(turboSound);
+                        Mix_CloseAudio();
                         return;
                     case SDL_KEYDOWN:
                         if(sdlEvent.key.keysym.sym == SDLK_UP || sdlEvent.key.keysym.sym == SDLK_DOWN) {
@@ -591,8 +606,13 @@ void play_the_game(SDL_Renderer *renderer) {
                                 ticksTillNextSecondPlayerBubble = 0;
                                 firstPlayerDied = false;
                                 secondPlayerDied = false;
+                                dustAmount = 0;
+                                turboAmount = 0;
                                 break;
                             } else {
+                                Mix_FreeChunk(dustSuckSound);
+                                Mix_FreeChunk(turboSound);
+                                Mix_CloseAudio();
                                 return;
                             }
                         }
@@ -700,9 +720,24 @@ playerGotTurbo(PlayerCharacter playerCharacter, vec2d turboPositions[MAX_TURBO_A
     return false;
 }
 
-void spawnDust(vec2d dustPositions[MAX_DUST_AMOUNT], int dustIndex, int dustSize) {
-    dustPositions[dustIndex] = {static_cast<double>(rand() % (PLAYGROUND_WIDTH - dustSize) + dustSize / 2),
-                                static_cast<double>(rand() % (PLAYGROUND_HEIGHT - dustSize) + dustSize / 2)};
+void spawnDust(vec2d dustPositions[MAX_DUST_AMOUNT], int dustIndex, int dustSize, int holeSize) {
+    do {
+        dustPositions[dustIndex] = {static_cast<double>(rand() % (PLAYGROUND_WIDTH - dustSize) + dustSize / 2),
+                                    static_cast<double>(rand() % (PLAYGROUND_HEIGHT - dustSize) + dustSize / 2)};
+    } while (isNewDustOnHole(dustPositions[dustIndex], holeSize));
+}
+
+bool isNewDustOnHole(vec2d dustPosition, int holeSize) {
+    for(int i=0; i<HOLES_AMOUNT; i++) {
+        if(getDistance(HOLES_POSITIONS[i], dustPosition) < holeSize) {
+            return true;
+        }
+    }
+    return false;
+}
+
+double getDistance(vec2d basePosition, vec2d comparedPosition) {
+    return sqrt(pow((comparedPosition[0] - basePosition[0]), 2) + pow((comparedPosition[1] - basePosition[1]), 2));
 }
 
 void spawnTurbo(vec2d turboPositions[MAX_TURBO_AMOUNT], int turboIndex, int turboWidth, int turboHeight) {
@@ -771,6 +806,17 @@ PlayerCharacter updatePlayerIfWallCollision(PlayerCharacter playerCharacter, int
 
 int main() {
     SDL_Init(SDL_INIT_EVERYTHING);
+    Mix_Init(0);
+    int openAudioRes = Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 1024);
+    if(openAudioRes < 0) {
+        std::cout << "Open audio failed";
+    }
+    int allocateChannelsRes = Mix_AllocateChannels(4);
+    if( allocateChannelsRes < 0 )
+    {
+        fprintf(stderr, "Unable to allocate mixing channels: %s\n", SDL_GetError());
+        exit(-1);
+    }
     SDL_Window *window;
     SDL_Renderer *renderer;
     SDL_CreateWindowAndRenderer(WINDOW_WIDTH, WINDOW_HEIGHT,
